@@ -75,14 +75,11 @@ def init_db():
     conn.commit()
     conn.close()
 
-def audit(actor: str, action: str, details: dict):
-    conn = db()
+def audit(conn, actor: str, action: str, details: dict):
     conn.execute(
         "INSERT INTO audit_logs(actor, action, details, created_at) VALUES (?,?,?,?)",
         (actor, action, json.dumps(details), datetime.utcnow().isoformat()),
     )
-    conn.commit()
-    conn.close()
 
 def research_generate(n: int = 5):
     pool = [
