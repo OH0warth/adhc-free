@@ -104,7 +104,7 @@ def research_generate(n: int = 5):
         created += 1
     conn.commit()
     conn.close()
-    audit("research_agent", "generate_opportunities", {"n": n, "created": created})
+    audit(conn, "research_agent", "generate_opportunities", {"n": n, "created": created})
 
 def ceo_cycle(max_new: int = 10, adopt_threshold: float = 75.0, mode: str = "manual"):
     conn = db()
@@ -142,7 +142,7 @@ def ceo_cycle(max_new: int = 10, adopt_threshold: float = 75.0, mode: str = "man
                 tasks_created += 1
         else:
             conn.execute("UPDATE opportunities SET status='rejected' WHERE id=?", (r["id"],))
-        audit("ceo_agent", "review_opportunity", {"opportunity_id": r["id"], "decision": decision, "score": r["score"]})
+        audit(conn, "ceo_agent", "review_opportunity", {"opportunity_id": r["id"], "decision": decision, "score": r["score"]})
 
     conn.commit()
     conn.close()
