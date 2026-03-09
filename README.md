@@ -1,20 +1,17 @@
-# ADHC Free Cloud (Streamlit-only)
+# ADHC Free Cloud MVP
 
-This version runs **entirely inside Streamlit** with a local SQLite database file (`adhc.db`).
-No Docker, no Postgres, no Redis, no paid cloud services.
+A free Streamlit-based Autonomous Digital Holding Company dashboard.
 
-## Deploy (Free)
-1. Push this repo to GitHub.
-2. Go to Streamlit Community Cloud → New app.
-3. Select this repo and set **Main file path** to `app.py`.
-4. Deploy.
+## Features
+- Generate opportunities
+- Run CEO cycle
+- Create and execute tasks
+- Track project MRR and traffic
+- Score projects for cashflow strength
+- Auto-run mode
+- Audit log
 
-## What works in this free version
-- Generate opportunities (simulated)
-- CEO cycle (adopt/reject + create tasks)
-- Mark tasks done
-- Portfolio summary + audit log
-
-
-### Streamlit Cloud note
-Streamlit Community Cloud runs your repo in a mostly read-only directory. This app stores its SQLite DB at `/tmp/adhc.db` by default (writable).
+## Deploy
+1. Upload `app.py`, `requirements.txt`, and `README.md` to GitHub
+2. Deploy on Streamlit Community Cloud
+3. Set main file path to `app.py`
