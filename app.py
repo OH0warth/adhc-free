@@ -7,12 +7,15 @@ import streamlit as st
 
 DB_PATH = os.getenv("ADHC_DB_PATH", "/tmp/adhc.db")
 
+
 def _ensure_db_dir():
     d = os.path.dirname(DB_PATH)
     if d and not os.path.exists(d):
         os.makedirs(d, exist_ok=True)
 
+
 def db():
+    _ensure_db_dir()
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.execute("PRAGMA journal_mode=WAL;")
     conn.execute("PRAGMA synchronous=NORMAL;")
@@ -20,9 +23,11 @@ def db():
     conn.row_factory = sqlite3.Row
     return conn
 
+
 def init_db():
     conn = db()
     cur = conn.cursor()
+
     cur.execute("""
     CREATE TABLE IF NOT EXISTS opportunities (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -36,6 +41,7 @@ def init_db():
         created_at TEXT NOT NULL
     )
     """)
+
     cur.execute("""
     CREATE TABLE IF NOT EXISTS projects (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -48,6 +54,7 @@ def init_db():
         FOREIGN KEY(opportunity_id) REFERENCES opportunities(id)
     )
     """)
+
     cur.execute("""
     CREATE TABLE IF NOT EXISTS tasks (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -63,6 +70,7 @@ def init_db():
         FOREIGN KEY(project_id) REFERENCES projects(id)
     )
     """)
+
     cur.execute("""
     CREATE TABLE IF NOT EXISTS audit_logs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -72,8 +80,48 @@ def init_db():
         created_at TEXT NOT NULL
     )
     """)
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+    )
+    """)
+
     conn.commit()
     conn.close()
+
+
+def ensure_project_columns():
+    conn = db()
+    cols = [r["name"] for r in conn.execute("PRAGMA table_info(projects)").fetchall()]
+
+    if "mrr" not in cols:
+        conn.execute("ALTER TABLE projects ADD COLUMN mrr REAL NOT NULL DEFAULT 0")
+    if "traffic" not in cols:
+        conn.execute("ALTER TABLE projects ADD COLUMN traffic REAL NOT NULL DEFAULT 0")
+    if "cashflow_score" not in cols:
+        conn.execute("ALTER TABLE projects ADD COLUMN cashflow_score REAL NOT NULL DEFAULT 0")
+
+    conn.commit()
+    conn.close()
+
+
+def get_setting(conn, key: str, default: str = "") -> str:
+    row = conn.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
+    return row["value"] if row else default
+
+
+def set_setting(conn, key: str, value: str):
+    conn.execute(
+        """
+        INSERT INTO settings(key, value)
+        VALUES (?, ?)
+        ON CONFLICT(key) DO UPDATE SET value=excluded.value
+        """,
+        (key, value),
+    )
+
 
 def audit(conn, actor: str, action: str, details: dict):
     conn.execute(
@@ -81,36 +129,96 @@ def audit(conn, actor: str, action: str, details: dict):
         (actor, action, json.dumps(details), datetime.utcnow().isoformat()),
     )
 
+
 def research_generate(n: int = 5):
     pool = [
-        ("Local service lead router", "Small businesses miss calls/leads and lose revenue", "Local trades (plumbers, HVAC, etc.)", "Pay-per-lead / monthly"),
-        ("Etsy listing optimizer", "Sellers struggle with SEO/copy and ranking", "Etsy sellers", "Subscription"),
-        ("Meeting follow-up autopilot", "Teams forget action items after meetings", "SMBs / agencies", "Subscription"),
-        ("Job applicant tracker", "Candidates lose track of applications and follow-ups", "Job seekers", "Freemium + upgrade"),
-        ("Shopify profit dashboard", "Store owners don't know true profit after fees/ads", "Shopify merchants", "Subscription"),
-        ("Clinic no-show reducer", "Appointment no-shows cost clinics money", "Dental/medical clinics", "Monthly + per-SMS"),
+        (
+            "Local service lead router",
+            "Small businesses miss calls/leads and lose revenue",
+            "Local trades (plumbers, HVAC, etc.)",
+            "Pay-per-lead / monthly",
+        ),
+        (
+            "Etsy listing optimizer",
+            "Sellers struggle with SEO/copy and ranking",
+            "Etsy sellers",
+            "Subscription",
+        ),
+        (
+            "Meeting follow-up autopilot",
+            "Teams forget action items after meetings",
+            "SMBs / agencies",
+            "Subscription",
+        ),
+        (
+            "Job applicant tracker",
+            "Candidates lose track of applications and follow-ups",
+            "Job seekers",
+            "Freemium + upgrade",
+        ),
+        (
+            "Shopify profit dashboard",
+            "Store owners don't know true profit after fees/ads",
+            "Shopify merchants",
+            "Subscription",
+        ),
+        (
+            "Clinic no-show reducer",
+            "Appointment no-shows cost clinics money",
+            "Dental/medical clinics",
+            "Monthly + per-SMS",
+        ),
+        (
+            "Podcast guest outreach CRM",
+            "Podcast hosts lose track of outreach and follow-ups",
+            "Podcast creators",
+            "Subscription",
+        ),
+        (
+            "Freelancer proposal assistant",
+            "Freelancers waste time writing repetitive proposals",
+            "Freelancers",
+            "Subscription",
+        ),
     ]
+
     conn = db()
     cur = conn.cursor()
     created = 0
+
     for i in range(n):
         title, problem, audience, monetization = pool[i % len(pool)]
-        score = float(65 + (i * 3) % 30)  # 65-94
+        score = float(65 + (i * 4) % 30)  # 65-93
+
         cur.execute(
-            """INSERT INTO opportunities(title, problem, audience, monetization, score, status, metadata, created_at)
-                 VALUES (?,?,?,?,?,?,?,?)""",
-            (title, problem, audience, monetization, score, "new", json.dumps({"source": "research_agent"}), datetime.utcnow().isoformat())
+            """
+            INSERT INTO opportunities(title, problem, audience, monetization, score, status, metadata, created_at)
+            VALUES (?,?,?,?,?,?,?,?)
+            """,
+            (
+                title,
+                problem,
+                audience,
+                monetization,
+                score,
+                "new",
+                json.dumps({"source": "research_agent"}),
+                datetime.utcnow().isoformat(),
+            ),
         )
         created += 1
+
+    audit(conn, "research_agent", "generate_opportunities", {"n": n, "created": created})
     conn.commit()
     conn.close()
-    audit(conn, "research_agent", "generate_opportunities", {"n": n, "created": created})
+
 
 def ceo_cycle(max_new: int = 10, adopt_threshold: float = 75.0, mode: str = "manual"):
     conn = db()
+
     rows = conn.execute(
         "SELECT * FROM opportunities WHERE status='new' ORDER BY score DESC LIMIT ?",
-        (max_new,)
+        (max_new,),
     ).fetchall()
 
     adopted = []
@@ -118,12 +226,22 @@ def ceo_cycle(max_new: int = 10, adopt_threshold: float = 75.0, mode: str = "man
 
     for r in rows:
         decision = "adopt" if float(r["score"]) >= adopt_threshold else "reject"
+
         if decision == "adopt":
             conn.execute("UPDATE opportunities SET status='adopted' WHERE id=?", (r["id"],))
             cur = conn.execute(
-                """INSERT INTO projects(opportunity_id, name, stage, budget_monthly_usd, notes, created_at)
-                     VALUES (?,?,?,?,?,?)""",
-                (r["id"], r["title"], "incubating", 250.0, "Auto-adopted by CEO agent.", datetime.utcnow().isoformat())
+                """
+                INSERT INTO projects(opportunity_id, name, stage, budget_monthly_usd, notes, created_at)
+                VALUES (?,?,?,?,?,?)
+                """,
+                (
+                    r["id"],
+                    r["title"],
+                    "incubating",
+                    250.0,
+                    "Auto-adopted by CEO agent.",
+                    datetime.utcnow().isoformat(),
+                ),
             )
             project_id = cur.lastrowid
             adopted.append(r["title"])
@@ -133,38 +251,203 @@ def ceo_cycle(max_new: int = 10, adopt_threshold: float = 75.0, mode: str = "man
                 ("marketing", "Launch landing page", "Create landing page + waitlist"),
                 ("research", "Validate demand", "Find 20 prospects + run interviews"),
             ]
+
             for ttype, title, desc in seed_tasks:
                 conn.execute(
-                    """INSERT INTO tasks(project_id, type, title, description, status, payload, result, created_at, updated_at)
-                         VALUES (?,?,?,?,?,?,?,?,?)""",
-                    (project_id, ttype, title, desc, "queued", json.dumps({"from": "ceo_agent", "mode": mode}), "{}", datetime.utcnow().isoformat(), datetime.utcnow().isoformat())
+                    """
+                    INSERT INTO tasks(project_id, type, title, description, status, payload, result, created_at, updated_at)
+                    VALUES (?,?,?,?,?,?,?,?,?)
+                    """,
+                    (
+                        project_id,
+                        ttype,
+                        title,
+                        desc,
+                        "queued",
+                        json.dumps({"from": "ceo_agent", "mode": mode}),
+                        "{}",
+                        datetime.utcnow().isoformat(),
+                        datetime.utcnow().isoformat(),
+                    ),
                 )
                 tasks_created += 1
         else:
             conn.execute("UPDATE opportunities SET status='rejected' WHERE id=?", (r["id"],))
-        audit(conn, "ceo_agent", "review_opportunity", {"opportunity_id": r["id"], "decision": decision, "score": r["score"]})
+
+        audit(
+            conn,
+            "ceo_agent",
+            "review_opportunity",
+            {
+                "opportunity_id": r["id"],
+                "decision": decision,
+                "score": r["score"],
+            },
+        )
 
     conn.commit()
     conn.close()
-    return {"mode": mode, "opportunities_reviewed": len(rows), "adopted_projects": adopted, "tasks_created": tasks_created}
 
-st.set_page_config(page_title="ADHC (Free Cloud)", layout="wide")
+    return {
+        "mode": mode,
+        "opportunities_reviewed": len(rows),
+        "adopted_projects": adopted,
+        "tasks_created": tasks_created,
+    }
+
+
+def execute_task(task_id: int):
+    conn = db()
+    task = conn.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
+
+    if not task:
+        conn.close()
+        return
+
+    ttype = task["type"]
+
+    if ttype == "build":
+        result = {
+            "deliverable": "MVP Build Plan",
+            "milestones": [
+                "Define ideal customer profile",
+                "Build landing page + waitlist",
+                "Implement one core feature",
+                "Add simple user auth",
+                "Deploy MVP and collect feedback",
+            ],
+            "repo_structure": ["app/", "api/", "data/"],
+            "risks": ["Scope creep", "Weak demand", "No clear distribution"],
+        }
+
+    elif ttype == "marketing":
+        result = {
+            "deliverable": "7-Day Launch Plan",
+            "channels": ["Communities", "Cold outreach", "SEO"],
+            "headlines": [
+                "Stop losing leads automatically.",
+                "The autopilot for your follow-ups.",
+                "Turn chaos into a repeatable system.",
+            ],
+            "first_week": [
+                "Post in 3 niche communities",
+                "Send 30 targeted outreach messages",
+                "Publish 2 simple SEO articles",
+            ],
+        }
+
+    elif ttype == "research":
+        result = {
+            "deliverable": "Validation Pack",
+            "questions": [
+                "How do you solve this today?",
+                "What is the most painful part?",
+                "How often does this problem happen?",
+                "What would a fix be worth per month?",
+            ],
+            "target_prospects": [
+                "Find 20 users in the niche on LinkedIn",
+                "Send a short 2-sentence DM",
+                "Ask for a 10-minute problem interview",
+            ],
+        }
+
+    else:
+        result = {"note": "No executor for this task type yet."}
+
+    conn.execute(
+        "UPDATE tasks SET status=?, result=?, updated_at=? WHERE id=?",
+        ("done", json.dumps(result), datetime.utcnow().isoformat(), task_id),
+    )
+
+    audit(conn, "executor", "execute_task", {"task_id": task_id, "type": ttype})
+    conn.commit()
+    conn.close()
+
+
+def update_cashflow_score(project_id: int):
+    conn = db()
+    proj = conn.execute("SELECT * FROM projects WHERE id=?", (project_id,)).fetchone()
+
+    if not proj:
+        conn.close()
+        return
+
+    mrr = float(proj["mrr"])
+    traffic = float(proj["traffic"])
+    stage = proj["stage"]
+
+    stage_bonus = {
+        "incubating": 10,
+        "building": 20,
+        "marketing": 35,
+        "operating": 50,
+        "paused": 5,
+        "killed": 0,
+    }.get(stage, 0)
+
+    score = min(100.0, stage_bonus + (mrr / 100.0) + (traffic / 200.0))
+
+    conn.execute(
+        "UPDATE projects SET cashflow_score=? WHERE id=?",
+        (score, project_id),
+    )
+    audit(conn, "analytics_agent", "update_cashflow_score", {"project_id": project_id, "cashflow_score": score})
+    conn.commit()
+    conn.close()
+
+
+def promote_project_stage(project_id: int):
+    conn = db()
+    proj = conn.execute("SELECT * FROM projects WHERE id=?", (project_id,)).fetchone()
+
+    if not proj:
+        conn.close()
+        return
+
+    current_stage = proj["stage"]
+    mrr = float(proj["mrr"])
+    traffic = float(proj["traffic"])
+
+    if mrr >= 1000:
+        new_stage = "operating"
+    elif traffic >= 500:
+        new_stage = "marketing"
+    else:
+        new_stage = "building"
+
+    if current_stage != new_stage:
+        conn.execute("UPDATE projects SET stage=? WHERE id=?", (new_stage, project_id))
+        audit(conn, "ceo_agent", "promote_project_stage", {"project_id": project_id, "from": current_stage, "to": new_stage})
+
+    conn.commit()
+    conn.close()
+    update_cashflow_score(project_id)
+
+
+st.set_page_config(page_title="ADHC (Cashflow Cloud MVP)", layout="wide")
+
 init_db()
+ensure_project_columns()
 
-st.title("ADHC — Autonomous Digital Holding Company (Free Cloud MVP)")
+st.title("ADHC — Autonomous Digital Holding Company (Cashflow Cloud MVP)")
 
 with st.sidebar:
-    st.subheader("Controls")
     st.subheader("Auto-run")
-auto_run = st.toggle("Auto-run on page load", value=False)
-auto_hours = st.number_input("Run at most once every (hours)", min_value=1, max_value=168, value=6)
-min_opps = st.number_input("Keep at least this many NEW opportunities", min_value=1, max_value=100, value=10)
+    auto_run = st.toggle("Auto-run on page load", value=False)
+    auto_hours = st.number_input("Run at most once every (hours)", min_value=1, max_value=168, value=6)
+    min_opps = st.number_input("Keep at least this many NEW opportunities", min_value=1, max_value=100, value=10)
+
+    st.divider()
+    st.subheader("Controls")
+
     gen_n = st.number_input("Generate opportunities", min_value=1, max_value=25, value=5, step=1)
     if st.button("Generate"):
         research_generate(int(gen_n))
         st.success("Opportunities generated.")
 
     st.divider()
+
     max_new = st.number_input("CEO cycle: max new to review", min_value=1, max_value=50, value=10, step=1)
     threshold = st.slider("Adopt threshold", min_value=0, max_value=100, value=75, step=1)
     if st.button("Run CEO cycle"):
@@ -172,22 +455,44 @@ min_opps = st.number_input("Keep at least this many NEW opportunities", min_valu
         st.success(f"Cycle done: adopted {len(out['adopted_projects'])}, tasks {out['tasks_created']}")
 
     st.divider()
+
     if st.button("Reset DB (danger)"):
         try:
             os.remove(DB_PATH)
         except FileNotFoundError:
             pass
         init_db()
+        ensure_project_columns()
         st.warning("Database reset.")
 
 conn = db()
-colA, colB, colC = st.columns(3)
+
+if auto_run:
+    last = get_setting(conn, "last_autorun", "1970-01-01T00:00:00")
+    last_dt = datetime.fromisoformat(last)
+    hours_since = (datetime.utcnow() - last_dt).total_seconds() / 3600
+
+    if hours_since >= float(auto_hours):
+        new_count = conn.execute("SELECT COUNT(*) c FROM opportunities WHERE status='new'").fetchone()["c"]
+        if new_count < int(min_opps):
+            research_generate(int(min_opps) - int(new_count))
+
+        ceo_cycle(max_new=20, adopt_threshold=75.0, mode="auto")
+
+        set_setting(conn, "last_autorun", datetime.utcnow().isoformat())
+        conn.commit()
+        st.toast("Auto-run completed", icon="✅")
+
 projects_total = conn.execute("SELECT COUNT(*) c FROM projects").fetchone()["c"]
 opps_total = conn.execute("SELECT COUNT(*) c FROM opportunities").fetchone()["c"]
 tasks_total = conn.execute("SELECT COUNT(*) c FROM tasks").fetchone()["c"]
+portfolio_mrr = conn.execute("SELECT COALESCE(SUM(mrr), 0) c FROM projects").fetchone()["c"]
+
+colA, colB, colC, colD = st.columns(4)
 colA.metric("Opportunities", opps_total)
 colB.metric("Projects", projects_total)
 colC.metric("Tasks", tasks_total)
+colD.metric("Portfolio MRR", f"${portfolio_mrr:,.0f}")
 
 st.divider()
 
@@ -206,6 +511,29 @@ projs = conn.execute("SELECT * FROM projects ORDER BY datetime(created_at) DESC 
 df_proj = pd.DataFrame([dict(r) for r in projs])
 if not df_proj.empty:
     st.dataframe(df_proj, use_container_width=True)
+
+    st.markdown("### Cashflow controls")
+    proj_ids = df_proj["id"].tolist()
+    pid = st.selectbox("Project ID", proj_ids)
+
+    mrr = st.number_input("Set MRR ($)", min_value=0.0, value=0.0, step=50.0)
+    traffic = st.number_input("Set Traffic (monthly visits)", min_value=0.0, value=0.0, step=100.0)
+
+    if st.button("Save project metrics"):
+        conn.execute(
+            "UPDATE projects SET mrr=?, traffic=? WHERE id=?",
+            (float(mrr), float(traffic), int(pid)),
+        )
+        audit(conn, "system", "update_project_metrics", {"project_id": int(pid), "mrr": float(mrr), "traffic": float(traffic)})
+        conn.commit()
+        update_cashflow_score(int(pid))
+        promote_project_stage(int(pid))
+        st.success("Saved and scored.")
+
+    if st.button("Recalculate cashflow score"):
+        update_cashflow_score(int(pid))
+        promote_project_stage(int(pid))
+        st.success("Cashflow score updated.")
 else:
     st.info("No projects yet. Run CEO cycle after generating opportunities.")
 
@@ -221,11 +549,20 @@ if not df_tasks.empty:
     task_ids = df_tasks["id"].tolist()
     selected = st.selectbox("Task ID", task_ids)
     new_status = st.selectbox("New status", ["queued", "running", "done", "failed", "cancelled"])
-    if st.button("Save status"):
-        conn.execute("UPDATE tasks SET status=?, updated_at=? WHERE id=?", (new_status, datetime.utcnow().isoformat(), int(selected)))
+    if st.button("Save task status"):
+        conn.execute(
+            "UPDATE tasks SET status=?, updated_at=? WHERE id=?",
+            (new_status, datetime.utcnow().isoformat(), int(selected)),
+        )
+        audit(conn, "system", "update_task_status", {"task_id": int(selected), "status": new_status})
         conn.commit()
-        audit("system", "update_task_status", {"task_id": int(selected), "status": new_status})
-        st.success("Updated. Refresh the page.")
+        st.success("Updated.")
+
+    st.markdown("### Execute a task")
+    exec_id = st.selectbox("Execute Task ID", task_ids, key="exec_task_id")
+    if st.button("Execute selected task"):
+        execute_task(int(exec_id))
+        st.success("Task executed.")
 else:
     st.info("No tasks yet.")
 
