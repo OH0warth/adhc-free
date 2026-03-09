@@ -155,6 +155,10 @@ st.title("ADHC — Autonomous Digital Holding Company (Free Cloud MVP)")
 
 with st.sidebar:
     st.subheader("Controls")
+    st.subheader("Auto-run")
+auto_run = st.toggle("Auto-run on page load", value=False)
+auto_hours = st.number_input("Run at most once every (hours)", min_value=1, max_value=168, value=6)
+min_opps = st.number_input("Keep at least this many NEW opportunities", min_value=1, max_value=100, value=10)
     gen_n = st.number_input("Generate opportunities", min_value=1, max_value=25, value=5, step=1)
     if st.button("Generate"):
         research_generate(int(gen_n))
