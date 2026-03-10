@@ -305,62 +305,123 @@ def execute_task(task_id: int):
         return
 
     ttype = task["type"]
+    title = task["title"]
+    desc = task["description"]
 
     if ttype == "build":
+
         result = {
             "deliverable": "MVP Build Plan",
-            "milestones": [
-                "Define ideal customer profile",
-                "Build landing page + waitlist",
-                "Implement one core feature",
-                "Add simple user auth",
-                "Deploy MVP and collect feedback",
+
+            "landing_page_structure": [
+                "Hero headline",
+                "Problem explanation",
+                "Solution description",
+                "Benefits list",
+                "Customer testimonials",
+                "Lead capture form",
+                "Call to action"
             ],
-            "repo_structure": ["app/", "api/", "data/"],
-            "risks": ["Scope creep", "Weak demand", "No clear distribution"],
+
+            "recommended_stack": [
+                "Carrd or Webflow landing page",
+                "Tally form",
+                "Google Sheets for leads"
+            ],
+
+            "build_steps": [
+                "Create landing page",
+                "Add lead capture form",
+                "Connect form to spreadsheet",
+                "Set up email notification for leads"
+            ]
         }
 
     elif ttype == "marketing":
+
         result = {
-            "deliverable": "7-Day Launch Plan",
-            "channels": ["Communities", "Cold outreach", "SEO"],
-            "headlines": [
-                "Stop losing leads automatically.",
-                "The autopilot for your follow-ups.",
-                "Turn chaos into a repeatable system.",
+
+            "landing_page_copy": {
+                "headline": "Stop Losing Customers Automatically",
+                "subheadline": "Simple automation that captures leads and converts them into paying customers.",
+                "cta": "Get Your Free Quote Now"
+            },
+
+            "lead_form_fields": [
+                "name",
+                "phone",
+                "email",
+                "postcode",
+                "service needed"
             ],
-            "first_week": [
-                "Post in 3 niche communities",
-                "Send 30 targeted outreach messages",
-                "Publish 2 simple SEO articles",
+
+            "google_ads_keywords": [
+                "local service quote",
+                "best service near me",
+                "get service quote today",
+                "emergency service help"
             ],
+
+            "outreach_email": """
+Subject: Quick question
+
+Hi,
+
+Do you currently buy leads for new customers?
+
+I generate exclusive leads for businesses in your area.
+
+Would you like to test a few leads to see if they convert?
+
+Best,
+""",
+
+            "lead_buyer_pitch": """
+Hi,
+
+I generate exclusive local leads in your area.
+
+These are customers actively requesting quotes.
+
+Would you be interested in buying a few test leads this week?
+"""
         }
 
     elif ttype == "research":
+
         result = {
-            "deliverable": "Validation Pack",
-            "questions": [
-                "How do you solve this today?",
-                "What is the most painful part?",
-                "How often does this problem happen?",
-                "What would a fix be worth per month?",
+
+            "market_validation_questions": [
+                "How do you currently solve this problem?",
+                "How often does this problem occur?",
+                "How much revenue do you lose when it happens?",
+                "What would solving this be worth per month?"
             ],
-            "target_prospects": [
-                "Find 20 users in the niche on LinkedIn",
-                "Send a short 2-sentence DM",
-                "Ask for a 10-minute problem interview",
+
+            "competitor_research": [
+                "Search Google for similar tools",
+                "Check pricing of top competitors",
+                "Look for gaps in their offering"
             ],
+
+            "target_customers": [
+                "local service businesses",
+                "small clinics",
+                "freelancers",
+                "online store owners"
+            ]
         }
 
     else:
-        result = {"note": "No executor for this task type yet."}
+        result = {"note": "No executor available"}
 
     conn.execute(
         "UPDATE tasks SET status=?, result=?, updated_at=? WHERE id=?",
-        ("done", json.dumps(result), datetime.utcnow().isoformat(), task_id),
+        ("done", json.dumps(result), datetime.utcnow().isoformat(), task_id)
     )
 
     audit(conn, "executor", "execute_task", {"task_id": task_id, "type": ttype})
+
     conn.commit()
     conn.close()
 
