@@ -580,22 +580,39 @@ def promote_project_stage(project_id: int):
     update_cashflow_score(project_id)
 
 
-# -----------------------
-# UI
-# -----------------------
-
-st.set_page_config(page_title="ADHC (Cashflow Cloud MVP)", layout="wide")
+st.set_page_config(page_title="ADHC (Cashflow + Lead Gen MVP)", layout="wide")
 
 init_db()
 ensure_project_columns()
+
+conn = db()
+
+saved_auto_run = get_setting(conn, "auto_run_enabled", "false") == "true"
+saved_auto_hours = int(get_setting(conn, "auto_run_hours", "6"))
+saved_min_opps = int(get_setting(conn, "auto_run_min_opps", "10"))
 
 st.title("ADHC — Autonomous Digital Holding Company (Cashflow + Lead Gen MVP)")
 
 with st.sidebar:
     st.subheader("Auto-run")
-    auto_run = st.toggle("Auto-run on page load", value=False)
-    auto_hours = st.number_input("Run at most once every (hours)", min_value=1, max_value=168, value=6)
-    min_opps = st.number_input("Keep at least this many NEW opportunities", min_value=1, max_value=100, value=10)
+    auto_run = st.toggle("Auto-run on page load", value=saved_auto_run)
+    auto_hours = st.number_input(
+        "Run at most once every (hours)",
+        min_value=1,
+        max_value=168,
+        value=saved_auto_hours
+    )
+    min_opps = st.number_input(
+        "Keep at least this many NEW opportunities",
+        min_value=1,
+        max_value=100,
+        value=saved_min_opps
+    )
+
+    set_setting(conn, "auto_run_enabled", "true" if auto_run else "false")
+    set_setting(conn, "auto_run_hours", str(auto_hours))
+    set_setting(conn, "auto_run_min_opps", str(min_opps))
+    conn.commit()
 
     st.divider()
     st.subheader("Controls")
@@ -623,8 +640,7 @@ with st.sidebar:
         init_db()
         ensure_project_columns()
         st.warning("Database reset.")
-
-conn = db()
+        st.rerun()
 
 if auto_run:
     last = get_setting(conn, "last_autorun", "1970-01-01T00:00:00")
@@ -722,6 +738,7 @@ if not df_proj.empty:
         promote_project_stage(int(pid))
         update_project_scores(int(pid))
         st.success("Saved and scored.")
+        st.rerun()
 
     if st.button("Recalculate all project scores"):
         for proj_id in proj_ids:
@@ -729,6 +746,7 @@ if not df_proj.empty:
             promote_project_stage(int(proj_id))
             update_project_scores(int(proj_id))
         st.success("All scores updated.")
+        st.rerun()
 else:
     st.info("No projects yet. Run CEO cycle after generating opportunities.")
 
@@ -752,12 +770,14 @@ if not df_tasks.empty:
         audit(conn, "system", "update_task_status", {"task_id": int(selected), "status": new_status})
         conn.commit()
         st.success("Updated.")
+        st.rerun()
 
     st.markdown("### Execute a task")
     exec_id = st.selectbox("Execute Task ID", task_ids, key="exec_task_id")
     if st.button("Execute selected task"):
         execute_task(int(exec_id))
-        st.success("Task executed. Refresh or scroll to inspect results in the Tasks table.")
+        st.success("Task executed. Refresh or inspect the result field in the Tasks table.")
+        st.rerun()
 else:
     st.info("No tasks yet.")
 
