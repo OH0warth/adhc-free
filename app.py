@@ -102,6 +102,12 @@ def ensure_project_columns():
         conn.execute("ALTER TABLE projects ADD COLUMN traffic REAL NOT NULL DEFAULT 0")
     if "cashflow_score" not in cols:
         conn.execute("ALTER TABLE projects ADD COLUMN cashflow_score REAL NOT NULL DEFAULT 0")
+    if "automation_score" not in cols:
+        conn.execute("ALTER TABLE projects ADD COLUMN automation_score REAL NOT NULL DEFAULT 0")
+    if "profit_potential" not in cols:
+        conn.execute("ALTER TABLE projects ADD COLUMN profit_potential REAL NOT NULL DEFAULT 0")
+    if "priority" not in cols:
+        conn.execute("ALTER TABLE projects ADD COLUMN priority TEXT NOT NULL DEFAULT 'normal'")
 
     conn.commit()
     conn.close()
@@ -134,51 +140,63 @@ def research_generate(n: int = 5):
     pool = [
         (
             "Local service lead router",
-            "Small businesses miss calls/leads and lose revenue",
-            "Local trades (plumbers, HVAC, etc.)",
-            "Pay-per-lead / monthly",
+            "Small businesses miss calls and lose leads before they can respond.",
+            "Local trades (plumbers, HVAC, electricians, roofers)",
+            "Pay-per-lead / monthly retainer",
+        ),
+        (
+            "Clinic no-show reducer",
+            "Clinics lose money from missed appointments and wasted staff time.",
+            "Dentists, physiotherapists, private clinics",
+            "Monthly subscription",
         ),
         (
             "Etsy listing optimizer",
-            "Sellers struggle with SEO/copy and ranking",
+            "Sellers struggle with SEO, titles, and conversion copy.",
             "Etsy sellers",
             "Subscription",
         ),
         (
-            "Meeting follow-up autopilot",
-            "Teams forget action items after meetings",
-            "SMBs / agencies",
-            "Subscription",
-        ),
-        (
-            "Job applicant tracker",
-            "Candidates lose track of applications and follow-ups",
-            "Job seekers",
-            "Freemium + upgrade",
-        ),
-        (
             "Shopify profit dashboard",
-            "Store owners don't know true profit after fees/ads",
+            "Store owners do not know true profit after fees, ads, and returns.",
             "Shopify merchants",
             "Subscription",
         ),
         (
-            "Clinic no-show reducer",
-            "Appointment no-shows cost clinics money",
-            "Dental/medical clinics",
-            "Monthly + per-SMS",
+            "Freelancer proposal assistant",
+            "Freelancers waste time writing repetitive proposals.",
+            "Freelancers and solo consultants",
+            "Subscription",
         ),
         (
             "Podcast guest outreach CRM",
-            "Podcast hosts lose track of outreach and follow-ups",
+            "Podcast hosts lose track of guest outreach and follow-ups.",
             "Podcast creators",
             "Subscription",
         ),
         (
-            "Freelancer proposal assistant",
-            "Freelancers waste time writing repetitive proposals",
-            "Freelancers",
-            "Subscription",
+            "Emergency roofer quote page",
+            "Homeowners need urgent roofing help and companies pay high lead values.",
+            "Roofing companies",
+            "Pay-per-lead",
+        ),
+        (
+            "Solar quote matcher",
+            "Solar installers need motivated homeowners actively requesting quotes.",
+            "Solar installers",
+            "Pay-per-lead",
+        ),
+        (
+            "Family law lead page",
+            "Law firms pay heavily for qualified inbound leads.",
+            "Family law solicitors",
+            "Pay-per-lead",
+        ),
+        (
+            "Dental implant lead page",
+            "Dental clinics want high-value treatment leads.",
+            "Cosmetic and implant dentists",
+            "Pay-per-lead / appointment fee",
         ),
     ]
 
@@ -188,7 +206,7 @@ def research_generate(n: int = 5):
 
     for i in range(n):
         title, problem, audience, monetization = pool[i % len(pool)]
-        score = float(65 + (i * 4) % 30)  # 65-93
+        score = float(68 + (i * 5) % 28)  # 68-95
 
         cur.execute(
             """
@@ -215,7 +233,6 @@ def research_generate(n: int = 5):
 
 def ceo_cycle(max_new: int = 10, adopt_threshold: float = 75.0, mode: str = "manual"):
     conn = db()
-
     rows = conn.execute(
         "SELECT * FROM opportunities WHERE status='new' ORDER BY score DESC LIMIT ?",
         (max_new,),
@@ -247,9 +264,9 @@ def ceo_cycle(max_new: int = 10, adopt_threshold: float = 75.0, mode: str = "man
             adopted.append(r["title"])
 
             seed_tasks = [
-                ("build", "MVP checklist", "Define MVP scope + tech plan"),
-                ("marketing", "Launch landing page", "Create landing page + waitlist"),
-                ("research", "Validate demand", "Find 20 prospects + run interviews"),
+                ("build", "Build the first lead-gen asset", "Define MVP lead asset structure and launch steps."),
+                ("marketing", "Launch landing page", "Generate landing page copy, lead form fields, keywords, and outreach."),
+                ("research", "Validate demand", "Find objections, customer pains, and basic competitor positioning."),
             ]
 
             for ttype, title, desc in seed_tasks:
@@ -305,123 +322,131 @@ def execute_task(task_id: int):
         return
 
     ttype = task["type"]
-    title = task["title"]
-    desc = task["description"]
 
     if ttype == "build":
-
         result = {
-            "deliverable": "MVP Build Plan",
-
-            "landing_page_structure": [
+            "deliverable": "Lead Gen Asset Build Kit",
+            "landing_page_sections": [
                 "Hero headline",
-                "Problem explanation",
-                "Solution description",
-                "Benefits list",
-                "Customer testimonials",
+                "Problem",
+                "Solution",
+                "Benefits",
+                "How it works",
+                "CTA",
                 "Lead capture form",
-                "Call to action"
             ],
-
-            "recommended_stack": [
-                "Carrd or Webflow landing page",
+            "tech_stack": [
+                "Carrd landing page",
                 "Tally form",
-                "Google Sheets for leads"
+                "Google Sheets lead tracker",
+                "Email inbox for lead notifications",
             ],
-
-            "build_steps": [
+            "launch_steps": [
                 "Create landing page",
-                "Add lead capture form",
-                "Connect form to spreadsheet",
-                "Set up email notification for leads"
-            ]
+                "Create form",
+                "Connect CTA button to form",
+                "Publish page",
+                "Send first 50 outreach messages",
+                "Track replies and objections",
+            ],
+            "risks": [
+                "Weak niche demand",
+                "Low outreach response rate",
+                "Poor value proposition clarity",
+            ],
         }
 
     elif ttype == "marketing":
-
         result = {
-
-            "landing_page_copy": {
-                "headline": "Stop Losing Customers Automatically",
-                "subheadline": "Simple automation that captures leads and converts them into paying customers.",
-                "cta": "Get Your Free Quote Now"
+            "landing_page": {
+                "headline": "Reduce Missed Appointments by 70% — Automatically",
+                "subheadline": "Automated SMS reminders for busy clinics that want fewer no-shows and more revenue.",
+                "cta": "Book Free Demo",
+                "trust_line": "No setup headaches. Works for busy clinics.",
+                "problem_section": "Missed appointments cost clinics money, waste staff time, and create gaps in the day.",
+                "solution_section": "Automatic SMS reminders confirm patients before they miss their appointment.",
+                "benefits": [
+                    "Reduce no-shows",
+                    "Save staff time",
+                    "Improve patient communication",
+                    "Increase clinic revenue",
+                ],
+                "mockup": "Hi Sarah — your appointment is tomorrow at 2:00 PM. Reply YES to confirm.",
             },
-
-            "lead_form_fields": [
-                "name",
-                "phone",
-                "email",
-                "postcode",
-                "service needed"
+            "form_fields": [
+                "Clinic Name",
+                "Contact Name",
+                "Email",
+                "Phone",
+                "Patients per month",
             ],
-
             "google_ads_keywords": [
-                "local service quote",
-                "best service near me",
-                "get service quote today",
-                "emergency service help"
+                "appointment reminder software",
+                "reduce clinic no shows",
+                "sms reminder for dentists",
+                "patient reminder system",
             ],
-
-            "outreach_email": """
-Subject: Quick question
+            "cold_outreach_email": """Subject: quick question about missed appointments
 
 Hi,
 
-Do you currently buy leads for new customers?
+Quick question.
 
-I generate exclusive leads for businesses in your area.
+Do you currently send automated SMS reminders to patients?
 
-Would you like to test a few leads to see if they convert?
+I'm testing a simple system that helps clinics reduce missed appointments and save staff time.
 
-Best,
-""",
+Would you be open to a free demo?
 
-            "lead_buyer_pitch": """
+Best,""",
+            "follow_up_email": """Subject: following up
+
 Hi,
 
-I generate exclusive local leads in your area.
+Just checking if reducing missed appointments is something you're currently working on.
 
-These are customers actively requesting quotes.
+Happy to send over a quick demo link if useful.
 
-Would you be interested in buying a few test leads this week?
-"""
+Best,""",
+            "lead_buyer_pitch": """Hi,
+
+I’m testing a clinic automation system focused on reducing no-shows and improving appointment confirmations.
+
+Would you be open to seeing a quick demo this week?""",
         }
 
     elif ttype == "research":
-
         result = {
-
-            "market_validation_questions": [
-                "How do you currently solve this problem?",
-                "How often does this problem occur?",
-                "How much revenue do you lose when it happens?",
-                "What would solving this be worth per month?"
+            "deliverable": "Validation Pack",
+            "questions": [
+                "How do you currently remind patients?",
+                "How often do patients miss appointments?",
+                "What does a missed appointment cost you?",
+                "Would you pay monthly to reduce that problem?",
             ],
-
-            "competitor_research": [
-                "Search Google for similar tools",
-                "Check pricing of top competitors",
-                "Look for gaps in their offering"
+            "niche_checks": [
+                "Look for competitors charging monthly",
+                "Check if clinics already use reminder tools",
+                "Find what users complain about in reviews",
             ],
-
             "target_customers": [
-                "local service businesses",
-                "small clinics",
-                "freelancers",
-                "online store owners"
-            ]
+                "dentists",
+                "physiotherapists",
+                "private clinics",
+                "cosmetic clinics",
+            ],
+            "validation_goal": "Get 5 positive replies from clinics",
         }
 
     else:
-        result = {"note": "No executor available"}
+        result = {"note": "No executor for this task type yet."}
 
     conn.execute(
         "UPDATE tasks SET status=?, result=?, updated_at=? WHERE id=?",
-        ("done", json.dumps(result), datetime.utcnow().isoformat(), task_id)
+        ("done", json.dumps(result), datetime.utcnow().isoformat(), task_id),
     )
 
     audit(conn, "executor", "execute_task", {"task_id": task_id, "type": ttype})
-
     conn.commit()
     conn.close()
 
@@ -458,6 +483,75 @@ def update_cashflow_score(project_id: int):
     conn.close()
 
 
+def update_project_scores(project_id: int):
+    conn = db()
+    proj = conn.execute("SELECT * FROM projects WHERE id=?", (project_id,)).fetchone()
+
+    if not proj:
+        conn.close()
+        return
+
+    name = (proj["name"] or "").lower()
+    mrr = float(proj["mrr"])
+    traffic = float(proj["traffic"])
+    stage = proj["stage"]
+
+    automation_score = 50.0
+    profit_potential = 50.0
+
+    if "clinic" in name or "lead" in name or "router" in name:
+        automation_score += 20
+        profit_potential += 20
+
+    if "roof" in name or "solar" in name or "law" in name or "dental" in name:
+        automation_score += 15
+        profit_potential += 25
+
+    if "shopify" in name or "dashboard" in name:
+        automation_score += 10
+        profit_potential += 10
+
+    if "freelancer" in name or "proposal" in name:
+        automation_score += 5
+        profit_potential += 5
+
+    if mrr > 0:
+        profit_potential += min(20, mrr / 100)
+
+    if traffic > 0:
+        automation_score += min(15, traffic / 200)
+
+    if stage == "operating":
+        profit_potential += 10
+    elif stage == "marketing":
+        profit_potential += 5
+
+    automation_score = min(100, automation_score)
+    profit_potential = min(100, profit_potential)
+
+    priority = "high" if (automation_score + profit_potential) / 2 >= 75 else "normal"
+
+    conn.execute(
+        "UPDATE projects SET automation_score=?, profit_potential=?, priority=? WHERE id=?",
+        (automation_score, profit_potential, priority, project_id),
+    )
+
+    audit(
+        conn,
+        "analytics_agent",
+        "update_project_scores",
+        {
+            "project_id": project_id,
+            "automation_score": automation_score,
+            "profit_potential": profit_potential,
+            "priority": priority,
+        },
+    )
+
+    conn.commit()
+    conn.close()
+
+
 def promote_project_stage(project_id: int):
     conn = db()
     proj = conn.execute("SELECT * FROM projects WHERE id=?", (project_id,)).fetchone()
@@ -486,12 +580,16 @@ def promote_project_stage(project_id: int):
     update_cashflow_score(project_id)
 
 
+# -----------------------
+# UI
+# -----------------------
+
 st.set_page_config(page_title="ADHC (Cashflow Cloud MVP)", layout="wide")
 
 init_db()
 ensure_project_columns()
 
-st.title("ADHC — Autonomous Digital Holding Company (Cashflow Cloud MVP)")
+st.title("ADHC — Autonomous Digital Holding Company (Cashflow + Lead Gen MVP)")
 
 with st.sidebar:
     st.subheader("Auto-run")
@@ -573,6 +671,30 @@ df_proj = pd.DataFrame([dict(r) for r in projs])
 if not df_proj.empty:
     st.dataframe(df_proj, use_container_width=True)
 
+    st.markdown("### Portfolio ranking")
+    ranked = conn.execute("""
+        SELECT id, name, stage, mrr, traffic, cashflow_score, automation_score, profit_potential, priority
+        FROM projects
+        ORDER BY
+            CASE WHEN priority = 'high' THEN 1 ELSE 2 END,
+            profit_potential DESC,
+            automation_score DESC,
+            cashflow_score DESC
+    """).fetchall()
+
+    df_ranked = pd.DataFrame([dict(r) for r in ranked])
+    if not df_ranked.empty:
+        st.dataframe(df_ranked, use_container_width=True)
+
+        top = df_ranked.iloc[0]
+        st.markdown("### Top recommendation")
+        st.success(
+            f"Focus next on: {top['name']} | "
+            f"Priority: {top['priority']} | "
+            f"Profit Potential: {top['profit_potential']} | "
+            f"Automation Score: {top['automation_score']}"
+        )
+
     st.markdown("### Cashflow controls")
     proj_ids = df_proj["id"].tolist()
     pid = st.selectbox("Project ID", proj_ids)
@@ -585,16 +707,28 @@ if not df_proj.empty:
             "UPDATE projects SET mrr=?, traffic=? WHERE id=?",
             (float(mrr), float(traffic), int(pid)),
         )
-        audit(conn, "system", "update_project_metrics", {"project_id": int(pid), "mrr": float(mrr), "traffic": float(traffic)})
+        audit(
+            conn,
+            "system",
+            "update_project_metrics",
+            {
+                "project_id": int(pid),
+                "mrr": float(mrr),
+                "traffic": float(traffic),
+            },
+        )
         conn.commit()
         update_cashflow_score(int(pid))
         promote_project_stage(int(pid))
+        update_project_scores(int(pid))
         st.success("Saved and scored.")
 
-    if st.button("Recalculate cashflow score"):
-        update_cashflow_score(int(pid))
-        promote_project_stage(int(pid))
-        st.success("Cashflow score updated.")
+    if st.button("Recalculate all project scores"):
+        for proj_id in proj_ids:
+            update_cashflow_score(int(proj_id))
+            promote_project_stage(int(proj_id))
+            update_project_scores(int(proj_id))
+        st.success("All scores updated.")
 else:
     st.info("No projects yet. Run CEO cycle after generating opportunities.")
 
@@ -623,7 +757,7 @@ if not df_tasks.empty:
     exec_id = st.selectbox("Execute Task ID", task_ids, key="exec_task_id")
     if st.button("Execute selected task"):
         execute_task(int(exec_id))
-        st.success("Task executed.")
+        st.success("Task executed. Refresh or scroll to inspect results in the Tasks table.")
 else:
     st.info("No tasks yet.")
 
